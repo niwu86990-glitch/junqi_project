@@ -1,0 +1,9 @@
+build/
+build_arm/
+*.o
+*.a
+*.tar
+*.tar.gz
+*.zip
+*.jpg
+*.png
