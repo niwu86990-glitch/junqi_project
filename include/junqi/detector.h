@@ -16,6 +16,9 @@ struct DetectedPiece {
 class Detector {
 public:
     std::vector<DetectedPiece> detect(const cv::Mat& gray, const cv::Mat& color) const;
+
+    /// Detect one centered piece for the interactive GUI workflow.
+    DetectedPiece detect_single(const cv::Mat& gray, const cv::Mat& color) const;
 };
 
 } // namespace junqi

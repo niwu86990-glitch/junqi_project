@@ -117,22 +117,24 @@ junqi/
     ├── CHANGELOG.md            #   变更日志
     ├── TODO.md                 #   待办事项
     ├── 2026-06-07-arm-cross-compile.md
-    └── 2026-06-07-gui-debug.md
+    ├── 2026-06-07-gui-debug.md
+    └── 2026-06-13-task-and-issue-summary.md # 本轮任务与问题总结
 ```
 
 ## 识别流水线
 
 ```
 输入图像
-  │
-  ├─ 1. Preprocessor    → 双边滤波去噪 + CLAHE 对比度增强
-  ├─ 2. Detector        → 轮廓分析 + 几何约束 → 左右棋子 ROI
-  ├─ 3. 对每枚棋子:
-  │   ├─ ColorClassifier    → HSV+Lab+YCrCb 三空间投票 → 红/黑
-  │   ├─ CharacterExtractor → 笔画提取 + 64×64 归一化
-  │   └─ Recognizer         → 模板匹配 (TM_CCOEFF_NORMED) + Hu 矩回退
-  └─ 4. BattleJudge     → 根据军棋规则判定胜负
+  ├─ 1. Preprocessor       → 局部光照估计与除法归一化 + CLAHE
+  ├─ 2. Detector           → 原始/归一化灰度、多极性阈值、边缘候选联合评分
+  ├─ 3. CharacterExtractor → 暗笔画、红色色差、局部自适应阈值多候选提取
+  ├─ 4. Recognizer         → 笔画重叠 + 双向轮廓距离 + 相关性联合评分
+  ├─ 5. ColorClassifier    → 相对 RGB/Lab/YCrCb 色度 + 高光邻域恢复
+  └─ 6. BattleJudge        → 双方分别确认后根据军棋规则判定
 ```
+
+识别算法不再假定拍摄背景必须为纯黑色。现有模板图片保持不变，运行时
+通过多候选提取和形状评分处理光照、反光、小角度旋转及位置变化。
 
 ## 支持的棋子
 

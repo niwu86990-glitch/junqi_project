@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 project(junqi_recognition VERSION 1.0.0 LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -54,6 +56,13 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_executable(score_templates tools/score_templates.cpp)
     target_compile_features(score_templates PRIVATE cxx_std_17)
     target_link_libraries(score_templates PRIVATE opencv_core opencv_imgcodecs)
+
+    add_executable(robustness_test tools/robustness_test.cpp)
+    target_compile_features(robustness_test PRIVATE cxx_std_17)
+    target_link_libraries(robustness_test PRIVATE junqi_core)
+
+    add_test(NAME synthetic_robustness
+             COMMAND robustness_test ${CMAKE_CURRENT_SOURCE_DIR}/templates)
 endif()
 
 # ---- Qt GUI application (可选编译) ----

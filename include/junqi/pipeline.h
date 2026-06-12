@@ -27,6 +27,11 @@ public:
 
     RecognitionOutput process(const cv::Mat& input_image);
 
+    /// Recognize one piece placed under the camera.
+    PieceResult process_single(const cv::Mat& input_image,
+                               std::string* error_message = nullptr,
+                               double* elapsed_ms = nullptr);
+
 private:
     Config config_;
     Preprocessor preprocessor_;

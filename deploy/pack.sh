@@ -3,23 +3,46 @@
 # 用法: bash deploy/pack.sh
 set -e
 
-# ========== 路径配置（按需修改）==========
-BUILD_DIR="/home/cheese/junqi_from_c/junqi/junqi/build_arm"
+# ========== 项目路径 ==========
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build_arm}"
 PKG_ROOT="/tmp/junqi_pkg/root/junqi"
-RUNSH_SRC="/home/cheese/junqi_from_c/junqi/junqi/deploy/run.sh"
-RUNCLI_SRC="/home/cheese/junqi_from_c/junqi/junqi/deploy/run_cli.sh"
-WINDOWS_OUT="/mnt/c/Users/cheese/Desktop/junqi_bin_only.tar.gz"
+RUNSH_SRC="${SCRIPT_DIR}/run.sh"
+RUNCLI_SRC="${SCRIPT_DIR}/run_cli.sh"
+WINDOWS_DESKTOP="${WINDOWS_DESKTOP:-}"
+
+if [ -z "${WINDOWS_DESKTOP}" ]; then
+    for candidate in \
+        "/mnt/c/Users/${USER}/Desktop" \
+        "/mnt/c/Users/cheese/Desktop" \
+        "/mnt/c/Users/${USER}/桌面"
+    do
+        if [ -d "${candidate}" ]; then
+            WINDOWS_DESKTOP="${candidate}"
+            break
+        fi
+    done
+fi
+
+if [ -z "${WINDOWS_DESKTOP}" ] ||
+   [ ! -d "${WINDOWS_DESKTOP}" ] ||
+   [ ! -w "${WINDOWS_DESKTOP}" ]; then
+    echo "错误: 找不到可写的 Windows 桌面目录。"
+    echo "可通过 WINDOWS_DESKTOP=/mnt/c/Users/<用户名>/Desktop 指定路径。"
+    exit 1
+fi
+WINDOWS_OUT="${WINDOWS_DESKTOP}/junqi_bin_only.tar.gz"
 
 # ========== 交叉编译 GUI + CLI ==========
-cd "${BUILD_DIR}"
-make -j$(nproc) junqi_gui junqi_cli 2>&1 | tail -8
+cmake --build "${BUILD_DIR}" --target junqi_gui junqi_cli -j"$(nproc)"
 
 # ========== 打包目录 ==========
 rm -rf "${PKG_ROOT}"
 mkdir -p "${PKG_ROOT}/bin"
 
 # 复制可执行文件
-cp junqi_gui junqi_cli "${PKG_ROOT}/bin/"
+cp "${BUILD_DIR}/junqi_gui" "${BUILD_DIR}/junqi_cli" "${PKG_ROOT}/bin/"
 cp "${RUNSH_SRC}" "${RUNCLI_SRC}" "${PKG_ROOT}/"
 
 
@@ -31,3 +54,4 @@ cd /tmp/junqi_pkg
 tar cf - . | gzip -9 > "${WINDOWS_OUT}"
 
 echo "=== Done: $(ls -lh "${WINDOWS_OUT}" | awk '{print $5}') ==="
+echo "已复制到 Windows 桌面: ${WINDOWS_OUT}"

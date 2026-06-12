@@ -1,5 +1,7 @@
 build/
 build_arm/
+build_arm_codex/
+Testing/
 *.o
 *.a
 *.tar

@@ -1,5 +1,7 @@
 #include "junqi/processing_worker.h"
 #include <QDebug>
+#include <QByteArray>
+#include <opencv2/imgcodecs.hpp>
 
 namespace junqi {
 
@@ -16,13 +18,13 @@ bool ProcessingWorker::isReady() const {
     return pipeline_ && pipeline_->is_ready();
 }
 
-void ProcessingWorker::process() {
+void ProcessingWorker::processSide(int side) {
     // ---- 1. 确保摄像头打开 ----
     if (!camera_.isOpened()) {
         emit statusChanged(QStringLiteral("正在打开摄像头..."));
         auto devPath = cameraDevice_.toLocal8Bit();
         if (!camera_.open(devPath.constData())) {
-            emit errorOccurred(QStringLiteral("无法打开摄像头 %1")
+            emit errorOccurred(side, QStringLiteral("无法打开摄像头 %1")
                                .arg(cameraDevice_));
             return;
         }
@@ -33,7 +35,7 @@ void ProcessingWorker::process() {
         emit statusChanged(QStringLiteral("正在加载模板库..."));
         pipeline_.reset(new Pipeline(pipelineConfig_));
         if (!pipeline_->is_ready()) {
-            emit errorOccurred(QStringLiteral("模板库加载失败: %1")
+            emit errorOccurred(side, QStringLiteral("模板库加载失败: %1")
                                .arg(QString::fromStdString(
                                    pipelineConfig_.template_dir)));
             pipeline_.reset();
@@ -45,23 +47,34 @@ void ProcessingWorker::process() {
     emit statusChanged(QStringLiteral("正在拍照..."));
     cv::Mat frame;
     if (!camera_.capture(frame) || frame.empty()) {
-        emit errorOccurred(QStringLiteral("摄像头采集失败"));
+        emit errorOccurred(side, QStringLiteral("摄像头采集失败"));
         return;
     }
 
-    // ---- 4. 运行识别流水线 ----
-    emit statusChanged(QStringLiteral("正在识别..."));
-    auto output = pipeline_->process(frame);
-
-    // ---- 5. 判定胜负 ----
-    BattleResult battleResult = BattleResult::INVALID;
-    if (output.success) {
-        battleResult = judge_.judge(output.left_piece, output.right_piece);
+    // Optional field-debug capture. The file is overwritten on each shot, so
+    // enabling it does not grow storage usage over time.
+    const QByteArray debugCapture = qgetenv("JUNQI_SAVE_LAST_CAPTURE");
+    if (!debugCapture.isEmpty() && debugCapture != "0") {
+        const QString path =
+            debugCapture == "1"
+                ? QStringLiteral("/root/junqi_last_capture.jpg")
+                : QString::fromLocal8Bit(debugCapture);
+        cv::imwrite(path.toLocal8Bit().constData(), frame);
     }
 
-    // ---- 6. 返回结果 ----
+    // ---- 4. 运行单棋子识别流水线 ----
+    emit statusChanged(QStringLiteral("正在识别..."));
+    std::string error;
+    double elapsedMs = 0.0;
+    auto piece = pipeline_->process_single(frame, &error, &elapsedMs);
+    if (piece.character_id < 0) {
+        emit errorOccurred(side, QStringLiteral("棋子识别失败，请重新摆放后再试"));
+        return;
+    }
+
+    // ---- 5. 返回结果；胜负由双方确认后在主线程判定 ----
     emit statusChanged(QStringLiteral("就绪"));
-    emit resultReady(output, battleResult);
+    emit pieceReady(side, piece, elapsedMs);
 }
 
 } // namespace junqi

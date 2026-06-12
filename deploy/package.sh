@@ -6,12 +6,27 @@
 # ============================================================
 set -e
 
-# ========== 路径配置（按需修改）==========
-DEPLOY_DIR="/home/cheese/junqi_from_c/junqi/junqi/deploy"
-BUILD_DIR="/home/cheese/junqi_from_c/junqi/junqi/build_arm"
-TEMPLATES_DIR="/home/cheese/junqi_from_c/junqi/junqi/templates"
+# ========== 项目路径 ==========
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+DEPLOY_DIR="${SCRIPT_DIR}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build_arm}"
+TEMPLATES_DIR="${PROJECT_ROOT}/templates"
 PACKAGE="junqi_deploy"
-WINDOWS_DESKTOP="/mnt/c/Users/cheese/Desktop"
+WINDOWS_DESKTOP="${WINDOWS_DESKTOP:-}"
+
+if [ -z "${WINDOWS_DESKTOP}" ]; then
+    for candidate in \
+        "/mnt/c/Users/${USER}/Desktop" \
+        "/mnt/c/Users/cheese/Desktop" \
+        "/mnt/c/Users/${USER}/桌面"
+    do
+        if [ -d "${candidate}" ]; then
+            WINDOWS_DESKTOP="${candidate}"
+            break
+        fi
+    done
+fi
 
 # ARM 第三方库路径
 QT5_ROOT="/home/cheese/x210/qt5.6.2"
@@ -20,6 +35,14 @@ OPENCV_LIB="/home/cheese/opencv3/lib"
 TSLIB_ROOT="/home/cheese/x210/tslib"
 
 echo "=== 军棋识别系统部署打包 ==="
+
+if [ ! -x "${BUILD_DIR}/junqi_gui" ] || [ ! -x "${BUILD_DIR}/junqi_cli" ]; then
+    echo "错误: 未找到本项目最新的 ARM 可执行文件:"
+    echo "  ${BUILD_DIR}/junqi_gui"
+    echo "  ${BUILD_DIR}/junqi_cli"
+    echo "请先完成 ARM 交叉编译，再重新运行本脚本。"
+    exit 1
+fi
 
 # 清理上次打包
 rm -rf "${DEPLOY_DIR}/${PACKAGE}"
@@ -121,15 +144,21 @@ echo "===== 打包完成 ====="
 ls -lh "${DEPLOY_DIR}/${PACKAGE}.tar.gz"
 
 # ========== 10. 复制到 Windows 桌面 ==========
-if [ -d "${WINDOWS_DESKTOP}" ] && [ -w "${WINDOWS_DESKTOP}" ]; then
-    cp "${DEPLOY_DIR}/${PACKAGE}.tar.gz" "${WINDOWS_DESKTOP}/"
-    echo ""
-    echo "已复制到 Windows 桌面: ${WINDOWS_DESKTOP}/${PACKAGE}.tar.gz"
+if [ -z "${WINDOWS_DESKTOP}" ] ||
+   [ ! -d "${WINDOWS_DESKTOP}" ] ||
+   [ ! -w "${WINDOWS_DESKTOP}" ]; then
+    echo "错误: 找不到可写的 Windows 桌面目录。"
+    echo "可通过 WINDOWS_DESKTOP=/mnt/c/Users/<用户名>/Desktop 指定路径。"
+    exit 1
 fi
+cp -f "${DEPLOY_DIR}/${PACKAGE}.tar.gz" "${WINDOWS_DESKTOP}/"
+echo ""
+echo "已复制到 Windows 桌面: ${WINDOWS_DESKTOP}/${PACKAGE}.tar.gz"
 
 echo ""
 echo "部署步骤:"
-echo "  1. 通过 Tftpd64 将 ${PACKAGE}.tar.gz 传到开发板"
-echo "  2. 在开发板上解压: tar xzf ${PACKAGE}.tar.gz -C /"
-echo "  3. 校准触摸屏: ts_calibrate  (如未校准)"
-echo "  4. 运行: sh /opt/junqi/run.sh"
+echo "  1. 将 ${PACKAGE}.tar.gz 放入 192.168.1.30 的 TFTP 根目录"
+echo "  2. 开发板执行: tftp -g -r ${PACKAGE}.tar.gz 192.168.1.30"
+echo "  3. 开发板执行: gunzip ${PACKAGE}.tar.gz"
+echo "  4. 开发板执行: cd / && tar xf /root/${PACKAGE}.tar -C /"
+echo "  5. 开发板执行: sh /opt/junqi/run.sh"

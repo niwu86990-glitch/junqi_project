@@ -84,3 +84,51 @@ right:
 # 识别单张照片
 ./build/junqi_cli photo.jpg templates/
 ```
+
+## 第五阶段：X210 开发板部署
+
+### 交叉编译
+
+```bash
+cmake -S . -B build_arm \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_study210.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_QT_GUI=ON
+cmake --build build_arm --target junqi_gui junqi_cli -j"$(nproc)"
+```
+
+### 生成完整部署包
+
+```bash
+bash deploy/package.sh
+```
+
+生成文件为 `deploy/junqi_deploy.tar.gz`。将它放入地址为
+`192.168.1.30` 的 TFTP 服务器根目录。脚本还会自动将同名部署包复制到
+Windows 桌面，例如 `/mnt/c/Users/cheese/Desktop/junqi_deploy.tar.gz`。
+
+### 开发板安装和启动
+
+在开发板 `/root` 目录执行：
+
+```sh
+cd /root
+tftp -g -r junqi_deploy.tar.gz 192.168.1.30
+gunzip junqi_deploy.tar.gz
+cd / && tar xf /root/junqi_deploy.tar -C /
+sh /opt/junqi/run.sh
+```
+
+重新部署前可删除开发板中残留的同名压缩包，避免 `tftp` 或 `gunzip`
+因目标文件已存在而失败。
+
+### 保存最近一次开发板截图
+
+默认不会写入调试照片。需要收集误判样本时，可执行：
+
+```sh
+JUNQI_SAVE_LAST_CAPTURE=1 sh /opt/junqi/run.sh
+```
+
+每次识别会覆盖保存 `/root/junqi_last_capture.jpg`，不会持续占用存储。
+建议分别收集红/黑棋子、亮光/暗光、不同背景和不同摆放位置的失败图片。

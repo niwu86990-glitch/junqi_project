@@ -11,8 +11,7 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "[MAIN] 0: program start\n");
 
     // 注册自定义类型以支持跨线程信号槽
-    qRegisterMetaType<junqi::RecognitionOutput>("junqi::RecognitionOutput");
-    qRegisterMetaType<junqi::BattleResult>("junqi::BattleResult");
+    qRegisterMetaType<junqi::PieceResult>("junqi::PieceResult");
 
     QApplication app(argc, argv);
     fprintf(stderr, "[MAIN] 1: QApplication created\n");
@@ -94,7 +93,9 @@ int main(int argc, char* argv[]) {
 
     fprintf(stderr, "[MAIN] 7: before show()\n");
     qDebug() << "[DEBUG] MainWindow created, calling show()...";
-    window.setGeometry(50, 50, 800, 480);
+    // X210 LCD physical size. Use a borderless normal window instead of
+    // showFullScreen(), which has triggered linuxfb mode-switch crashes.
+    window.setGeometry(0, 0, 1024, 600);
     window.show();
     fprintf(stderr, "[MAIN] 8: after show()\n");
 

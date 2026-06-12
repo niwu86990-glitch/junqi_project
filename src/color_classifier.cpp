@@ -1,151 +1,158 @@
 #include "junqi/color_classifier.h"
+
 #include <opencv2/imgproc.hpp>
+#include <algorithm>
+#include <vector>
 
 namespace junqi {
+namespace {
+
+double median_channel(const cv::Mat& channel) {
+    std::vector<unsigned char> values;
+    values.assign(channel.datastart, channel.dataend);
+    const size_t middle = values.size() / 2;
+    std::nth_element(values.begin(), values.begin() + middle, values.end());
+    return values[middle];
+}
+
+} // namespace
 
 cv::Mat ColorClassifier::buildHighlightMask(const cv::Mat& hsv) const {
     std::vector<cv::Mat> channels;
     cv::split(hsv, channels);
 
-    // Dynamic highlight threshold: mean_V + 2 * stddev_V
     cv::Scalar mean_v, std_v;
     cv::meanStdDev(channels[2], mean_v, std_v);
     double hi_thresh = mean_v[0] + 2.0 * std_v[0];
-    hi_thresh = std::min(255.0, hi_thresh);
-    hi_thresh = std::max(200.0, hi_thresh);
+    hi_thresh = std::min(255.0, std::max(205.0, hi_thresh));
 
-    cv::Mat high_val, low_sat;
-    cv::inRange(channels[2], hi_thresh, 255, high_val);
-    cv::inRange(channels[1], 0, 50, low_sat);
-
-    cv::Mat highlight;
-    cv::bitwise_and(high_val, low_sat, highlight);
-
-    // Dark pixels (black ink or shadow)
-    cv::Mat dark;
-    cv::inRange(channels[2], 0, 60, dark);
-
-    // Near-white background
-    cv::Mat bg;
-    cv::inRange(channels[2], 200, 255, bg);
-
-    cv::Mat invalid;
-    cv::bitwise_or(highlight, dark, invalid);
-    cv::bitwise_or(invalid, bg, invalid);
-
-    cv::Mat valid;
-    cv::bitwise_not(invalid, valid);
-    return valid;
+    cv::Mat high_value, low_saturation, highlight;
+    cv::inRange(channels[2], hi_thresh, 255, high_value);
+    cv::inRange(channels[1], 0, 35, low_saturation);
+    cv::bitwise_and(high_value, low_saturation, highlight);
+    return highlight;
 }
 
 PieceColor ColorClassifier::classify(const cv::Mat& piece_color_roi) const {
-    // §2.1: Gradient-based stroke mask (excludes background texture/shadows)
-    cv::Mat gray;
-    cv::cvtColor(piece_color_roi, gray, cv::COLOR_BGR2GRAY);
+    if (piece_color_roi.empty()) return PieceColor::UNKNOWN;
 
-    cv::Mat gx, gy;
-    cv::Sobel(gray, gx, CV_32F, 1, 0, 3);
-    cv::Sobel(gray, gy, CV_32F, 0, 1, 3);
-    cv::Mat grad = cv::abs(gx) + cv::abs(gy);
-    grad.convertTo(grad, CV_8U);
-
-    cv::Mat stroke_mask;
-    cv::threshold(grad, stroke_mask, 20, 255, cv::THRESH_BINARY);
-
-    // Fallback to Otsu if gradient mask is too sparse (< 3% of total pixels)
-    double grad_ratio = static_cast<double>(cv::countNonZero(stroke_mask))
-                      / (stroke_mask.rows * stroke_mask.cols);
-    if (grad_ratio < 0.05) {
-        cv::threshold(gray, stroke_mask, 0, 255,
-                      cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
+    cv::Mat color_roi = piece_color_roi;
+    if (piece_color_roi.cols >= 80 && piece_color_roi.rows >= 60) {
+        const int mx = piece_color_roi.cols / 10;
+        const int my = piece_color_roi.rows / 10;
+        color_roi = piece_color_roi(
+            cv::Rect(mx, my, piece_color_roi.cols - 2 * mx,
+                     piece_color_roi.rows - 2 * my));
     }
 
-    // Convert to multiple color spaces
-    cv::Mat hsv, lab, ycrcb;
-    cv::cvtColor(piece_color_roi, hsv, cv::COLOR_BGR2HSV);
-    cv::cvtColor(piece_color_roi, lab, cv::COLOR_BGR2Lab);
-    cv::cvtColor(piece_color_roi, ycrcb, cv::COLOR_BGR2YCrCb);
+    cv::Mat gray, hsv, lab, ycrcb;
+    cv::cvtColor(color_roi, gray, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(color_roi, hsv, cv::COLOR_BGR2HSV);
+    cv::cvtColor(color_roi, lab, cv::COLOR_BGR2Lab);
+    cv::cvtColor(color_roi, ycrcb, cv::COLOR_BGR2YCrCb);
 
-    // Valid-stroke masks
-    cv::Mat red_valid_mask = buildHighlightMask(hsv);
-    cv::Mat red_valid_stroke;
-    cv::bitwise_and(stroke_mask, red_valid_mask, red_valid_stroke);
+    std::vector<cv::Mat> bgr_channels, hsv_channels;
+    std::vector<cv::Mat> lab_channels, ycrcb_channels;
+    cv::split(color_roi, bgr_channels);
+    cv::split(hsv, hsv_channels);
+    cv::split(lab, lab_channels);
+    cv::split(ycrcb, ycrcb_channels);
 
-    cv::Mat black_valid_mask;
-    {
-        std::vector<cv::Mat> hsv_ch;
-        cv::split(hsv, hsv_ch);
+    // Estimate the piece's current neutral color. Relative chroma offsets are
+    // more stable than fixed thresholds under exposure and white-balance drift.
+    const double median_a = median_channel(lab_channels[1]);
+    const double median_cr = median_channel(ycrcb_channels[1]);
 
-        cv::Scalar mean_v2, std_v2;
-        cv::meanStdDev(hsv_ch[2], mean_v2, std_v2);
-        double dyn_hi = std::min(255.0, std::max(200.0, mean_v2[0] + 2.0 * std_v2[0]));
+    cv::Mat max_gb, red_excess;
+    cv::max(bgr_channels[0], bgr_channels[1], max_gb);
+    cv::subtract(bgr_channels[2], max_gb, red_excess);
 
-        cv::Mat high_val, low_sat;
-        cv::inRange(hsv_ch[2], dyn_hi, 255, high_val);
-        cv::inRange(hsv_ch[1], 0, 50, low_sat);
-        cv::Mat highlight;
-        cv::bitwise_and(high_val, low_sat, highlight);
+    cv::Mat red_rgb, red_lab, red_cr;
+    cv::threshold(red_excess, red_rgb, 8, 255, cv::THRESH_BINARY);
+    cv::threshold(lab_channels[1], red_lab,
+                  std::min(255.0, median_a + 5.0), 255,
+                  cv::THRESH_BINARY);
+    cv::threshold(ycrcb_channels[1], red_cr,
+                  std::min(255.0, median_cr + 6.0), 255,
+                  cv::THRESH_BINARY);
 
-        cv::Mat bg;
-        cv::inRange(hsv_ch[2], 200, 255, bg);
+    // A red pixel must satisfy at least two independent color descriptions.
+    cv::Mat rgb_lab, rgb_cr, lab_cr, red_seed;
+    cv::bitwise_and(red_rgb, red_lab, rgb_lab);
+    cv::bitwise_and(red_rgb, red_cr, rgb_cr);
+    cv::bitwise_and(red_lab, red_cr, lab_cr);
+    cv::bitwise_or(rgb_lab, rgb_cr, red_seed);
+    cv::bitwise_or(red_seed, lab_cr, red_seed);
 
-        cv::Mat black_invalid;
-        cv::bitwise_or(highlight, bg, black_invalid);
-        cv::bitwise_not(black_invalid, black_valid_mask);
+    cv::Mat saturation_ok, value_ok;
+    cv::threshold(hsv_channels[1], saturation_ok, 10, 255,
+                  cv::THRESH_BINARY);
+    cv::threshold(hsv_channels[2], value_ok, 25, 255,
+                  cv::THRESH_BINARY);
+    cv::bitwise_and(red_seed, saturation_ok, red_seed);
+    cv::bitwise_and(red_seed, value_ok, red_seed);
+
+    cv::Mat highlight = buildHighlightMask(hsv);
+    cv::Mat red_neighborhood;
+    cv::Mat recovery_kernel =
+        cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7, 7));
+    cv::dilate(red_seed, red_neighborhood, recovery_kernel);
+
+    // A white highlight is accepted as part of a red stroke only when red
+    // evidence surrounds it. Pure glare elsewhere on the piece is ignored.
+    cv::Mat recovered_highlight;
+    cv::bitwise_and(highlight, red_neighborhood, recovered_highlight);
+    cv::Mat red_mask;
+    cv::bitwise_or(red_seed, recovered_highlight, red_mask);
+
+    cv::Mat clean_kernel =
+        cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::morphologyEx(red_mask, red_mask, cv::MORPH_CLOSE, clean_kernel);
+
+    // Black strokes are locally dark and nearly neutral. Requiring low red
+    // chroma keeps dim red pixels from being counted as black.
+    cv::Mat dark_mask, low_red_excess, low_saturation, black_mask;
+    cv::threshold(gray, dark_mask, 95, 255, cv::THRESH_BINARY_INV);
+    cv::threshold(red_excess, low_red_excess, 7, 255,
+                  cv::THRESH_BINARY_INV);
+    cv::threshold(hsv_channels[1], low_saturation, 65, 255,
+                  cv::THRESH_BINARY_INV);
+    cv::bitwise_and(dark_mask, low_red_excess, black_mask);
+    cv::bitwise_and(black_mask, low_saturation, black_mask);
+
+    const int roi_area = color_roi.rows * color_roi.cols;
+    const int red_pixels = cv::countNonZero(red_mask);
+    const int red_core_pixels = cv::countNonZero(red_seed);
+    const int black_pixels = cv::countNonZero(black_mask);
+
+    // Connected components reject isolated reddish noise from the table or
+    // compression artifacts while preserving separated Chinese strokes.
+    cv::Mat labels, stats, centroids;
+    const int component_count =
+        cv::connectedComponentsWithStats(red_seed, labels, stats, centroids,
+                                         8, CV_32S);
+    int meaningful_red_pixels = 0;
+    const int min_component = std::max(3, roi_area / 4000);
+    for (int i = 1; i < component_count; ++i) {
+        const int area = stats.at<int>(i, cv::CC_STAT_AREA);
+        if (area >= min_component) meaningful_red_pixels += area;
     }
-    cv::Mat black_valid_stroke;
-    cv::bitwise_and(stroke_mask, black_valid_mask, black_valid_stroke);
 
-    // --- HSV red vote (§2.3: relaxed thresholds) ---
-    std::vector<cv::Mat> hsv_ch;
-    cv::split(hsv, hsv_ch);
-    cv::Mat red_hue1, red_hue2, red_hue;
-    cv::inRange(hsv_ch[0], 0, 20, red_hue1);
-    cv::inRange(hsv_ch[0], 165, 180, red_hue2);
-    cv::bitwise_or(red_hue1, red_hue2, red_hue);
-    cv::Mat red_sat, red_val;
-    cv::inRange(hsv_ch[1], 30, 255, red_sat);
-    cv::inRange(hsv_ch[2], 30, 255, red_val);
-    cv::Mat hsv_red;
-    cv::bitwise_and(red_hue, red_sat, hsv_red);
-    cv::bitwise_and(hsv_red, red_val, hsv_red);
-    cv::bitwise_and(hsv_red, red_valid_stroke, hsv_red);
-    int red_votes = cv::countNonZero(hsv_red);
+    const int min_red = std::max(12, roi_area / 700);
+    const int min_black = std::max(18, roi_area / 500);
 
-    // --- Lab a* red vote ---
-    std::vector<cv::Mat> lab_ch;
-    cv::split(lab, lab_ch);
-    cv::Mat lab_red;
-    cv::inRange(lab_ch[1], 140, 255, lab_red);
-    cv::bitwise_and(lab_red, red_valid_stroke, lab_red);
-    red_votes += cv::countNonZero(lab_red);
-
-    // --- YCrCb Cr red vote ---
-    std::vector<cv::Mat> ycrcb_ch;
-    cv::split(ycrcb, ycrcb_ch);
-    cv::Mat ycrcb_red;
-    cv::inRange(ycrcb_ch[1], 145, 255, ycrcb_red);
-    cv::bitwise_and(ycrcb_red, red_valid_stroke, ycrcb_red);
-    red_votes += cv::countNonZero(ycrcb_red);
-
-    // --- Black votes (§2.3: relaxed thresholds) ---
-    cv::Mat black_v;
-    cv::inRange(hsv_ch[2], 0, 90, black_v);
-    cv::bitwise_and(black_v, black_valid_stroke, black_v);
-    int black_votes = cv::countNonZero(black_v);
-
-    cv::Mat black_l;
-    cv::inRange(lab_ch[0], 0, 80, black_l);
-    cv::bitwise_and(black_l, black_valid_stroke, black_l);
-    black_votes += cv::countNonZero(black_l);
-
-    cv::Mat black_y;
-    cv::inRange(ycrcb_ch[0], 0, 90, black_y);
-    cv::bitwise_and(black_y, black_valid_stroke, black_y);
-    black_votes += cv::countNonZero(black_y);
-
-    if (red_votes > black_votes * 1.5) return PieceColor::RED;
-    if (black_votes > red_votes * 1.5) return PieceColor::BLACK;
+    if (meaningful_red_pixels >= min_red &&
+        red_core_pixels > black_pixels * 0.12) {
+        return PieceColor::RED;
+    }
+    if (black_pixels >= min_black &&
+        red_pixels < black_pixels * 0.18) {
+        return PieceColor::BLACK;
+    }
+    if (meaningful_red_pixels >= min_red / 2 &&
+        red_pixels > black_pixels * 0.30) {
+        return PieceColor::RED;
+    }
     return PieceColor::UNKNOWN;
 }
 
