@@ -13,7 +13,7 @@
 ## 算法流水线
 
 ```
-原始图像 → 预处理 → 棋子检测 → 棋子校正 → 颜色分类 → 字符提取 → 模板匹配 → 识别结果
+原始图像 → 预处理 → 棋子检测 → 棋子校正 → 字符提取 → 模板匹配 → 识别结果
 ```
 
 ### 1. 预处理
@@ -26,26 +26,13 @@
 - 几何约束：面积在图像 2%-60% 之间，长宽比 1.1-1.9
 - 排序：按 x 坐标区分左右
 
-### 3. 颜色分类（多色彩空间投票）
-- 字符笔画提取 → 高光掩码排除 → 有效笔画像素统计
-- 高光检测：HSV 中 V>230 且 S<40
-- 红色投票：
-  - HSV: H∈[0,15]∪[165,180] 且 S>60 且 V>60
-  - Lab: a*>140
-  - YCrCb: Cr>145
-- 黑色投票：
-  - HSV: V<70
-  - Lab: L<60
-  - YCrCb: Y<70
-- 判定：红票 > 黑票 ×1.5 → RED；黑票 > 红票 ×1.5 → BLACK
-
-### 4. 字符提取
+### 3. 字符提取
 - 棋子 ROI 内 Otsu 二值化
 - 所有笔画轮廓合并 bounding box
 - 四周加 10% padding
 - 归一化到 64×64
 
-### 5. 模板匹配
+### 4. 模板匹配
 - 主方法：`cv::TM_CCOEFF_NORMED`
 - 搜索空间：旋转 [-5°,+5°] 步长 1°，缩放 [0.90,1.10] 步长 0.05
 - 回退：Hu 矩 `cv::matchShapes`（主方法置信度 <0.80 时启用）
@@ -53,10 +40,11 @@
 ## 数据结构
 
 ```cpp
-PieceColor { RED, BLACK, UNKNOWN }
-PieceResult { color, character, character_id, confidence, bounding_box }
+PieceResult { character, character_id, confidence, bounding_box }
 RecognitionOutput { left_piece, right_piece, success, error_message, elapsed_ms }
 ```
+
+红黑阵营不属于图像识别结果，由 GUI 的红方/黑方操作入口确定。
 
 ## 模板库规格
 

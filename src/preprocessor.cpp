@@ -28,7 +28,7 @@ PreprocessedImage Preprocessor::process(const cv::Mat& input) const {
     auto clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
     clahe->apply(denoised, result.gray);
 
-    // Preserve chroma for red/black classification; heavy color smoothing
+    // Preserve chroma for color-aware character extraction; heavy smoothing
     // blends thin red strokes into reflective piece surfaces.
     cv::bilateralFilter(input, result.color, 5, 30.0, 30.0);
 

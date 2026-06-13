@@ -113,11 +113,100 @@ std::vector<DetectedPiece> Detector::detect(const cv::Mat& gray, const cv::Mat& 
 
 DetectedPiece Detector::detect_single(const cv::Mat& gray, const cv::Mat& color) const {
     const double image_area = static_cast<double>(gray.rows) * gray.cols;
-    const double min_area = image_area * 0.025;
+    const double min_area = image_area * 0.005;
     const double max_area = image_area * 0.80;
     cv::Rect best_box;
     double best_score = -1e9;
     const cv::Point2d image_center(gray.cols / 2.0, gray.rows / 2.0);
+
+    // Real board captures usually contain one light, low-saturation piece on
+    // a darker table. Detect that rectangle first; it is both more reliable
+    // and much cheaper than scoring every threshold polarity over the frame.
+    if (!color.empty() && color.channels() == 3) {
+        cv::Mat hsv;
+        cv::cvtColor(color, hsv, cv::COLOR_BGR2HSV);
+        std::vector<cv::Mat> channels;
+        cv::split(hsv, channels);
+
+        cv::Mat bright, low_saturation, piece_mask;
+        const double otsu_level =
+            cv::threshold(channels[2], bright, 0, 255,
+                          cv::THRESH_BINARY | cv::THRESH_OTSU);
+        const double minimum_brightness = std::max(135.0, otsu_level);
+        cv::threshold(channels[2], bright, minimum_brightness, 255,
+                      cv::THRESH_BINARY);
+        cv::threshold(channels[1], low_saturation, 125, 255,
+                      cv::THRESH_BINARY_INV);
+        cv::bitwise_and(bright, low_saturation, piece_mask);
+
+        const cv::Mat close_kernel = cv::getStructuringElement(
+            cv::MORPH_RECT, cv::Size(11, 11));
+        const cv::Mat open_kernel = cv::getStructuringElement(
+            cv::MORPH_RECT, cv::Size(3, 3));
+        cv::morphologyEx(piece_mask, piece_mask, cv::MORPH_CLOSE,
+                         close_kernel);
+        cv::morphologyEx(piece_mask, piece_mask, cv::MORPH_OPEN,
+                         open_kernel);
+
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(piece_mask, contours, cv::RETR_EXTERNAL,
+                         cv::CHAIN_APPROX_SIMPLE);
+
+        cv::Rect bright_box;
+        double bright_score = -1e9;
+        for (const auto& contour : contours) {
+            const double area = cv::contourArea(contour);
+            if (area < image_area * 0.004 ||
+                area > image_area * 0.25) {
+                continue;
+            }
+
+            const cv::Rect box = cv::boundingRect(contour);
+            if (box.width < 30 || box.height < 25) continue;
+            const double aspect =
+                static_cast<double>(box.width) / box.height;
+            if (aspect < 0.70 || aspect > 2.60) continue;
+
+            const double rectangularity =
+                area / std::max(1, box.area());
+            if (rectangularity < 0.55) continue;
+
+            const cv::Point2d center(box.x + box.width / 2.0,
+                                     box.y + box.height / 2.0);
+            const double diagonal = std::sqrt(
+                static_cast<double>(gray.cols * gray.cols +
+                                    gray.rows * gray.rows));
+            const double center_score =
+                1.0 - std::min(1.0, cv::norm(center - image_center) /
+                                      diagonal);
+            const double aspect_score =
+                std::exp(-std::abs(std::log(aspect / 1.45)));
+            const double score =
+                rectangularity * 4.0 + aspect_score * 2.0 +
+                center_score * 0.5 + std::min(area / image_area, 0.08) * 4.0;
+            if (score > bright_score) {
+                bright_score = score;
+                bright_box = box;
+            }
+        }
+
+        if (bright_box.area() > 0) {
+            const int px = std::max(3, bright_box.width / 18);
+            const int py = std::max(3, bright_box.height / 18);
+            bright_box = cv::Rect(bright_box.x - px, bright_box.y - py,
+                                  bright_box.width + 2 * px,
+                                  bright_box.height + 2 * py);
+            bright_box &= cv::Rect(0, 0, gray.cols, gray.rows);
+
+            DetectedPiece piece;
+            piece.bounding_box = bright_box;
+            piece.rotated_box = cv::RotatedRect();
+            piece.roi_gray = gray(bright_box).clone();
+            piece.roi_color = color(bright_box).clone();
+            piece.is_left = true;
+            return piece;
+        }
+    }
 
     std::vector<cv::Mat> masks;
     cv::Mat raw_gray;

@@ -3,7 +3,6 @@
 #include "result.h"
 #include "preprocessor.h"
 #include "detector.h"
-#include "color_classifier.h"
 #include "character_extractor.h"
 #include "recognizer.h"
 #include "template_library.h"
@@ -36,7 +35,6 @@ private:
     Config config_;
     Preprocessor preprocessor_;
     Detector detector_;
-    ColorClassifier color_classifier_;
     CharacterExtractor character_extractor_;
     TemplateLibrary library_;
     Recognizer recognizer_;

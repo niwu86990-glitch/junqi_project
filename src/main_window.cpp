@@ -280,19 +280,12 @@ void MainWindow::onPieceReady(int side, junqi::PieceResult piece,
 bool MainWindow::confirmPiece(int side, junqi::PieceResult& piece) {
     const QString sideText = side == 0 ? QStringLiteral("红方")
                                        : QStringLiteral("黑方");
-    const junqi::PieceColor expectedColor =
-        side == 0 ? junqi::PieceColor::RED : junqi::PieceColor::BLACK;
 
     QString details = QStringLiteral(
-        "%1识别结果\n\n颜色：%2\n棋子：%3\n置信度：%4%")
+        "%1识别结果\n\n棋子：%2\n置信度：%3%")
         .arg(sideText)
-        .arg(colorText(piece.color))
         .arg(QString::fromStdString(piece.character))
         .arg(static_cast<int>(piece.confidence * 100));
-    if (piece.color != junqi::PieceColor::UNKNOWN &&
-        piece.color != expectedColor) {
-        details += QStringLiteral("\n\n注意：识别颜色与当前一方不一致");
-    }
     details += QStringLiteral("\n\n确认后结果会从界面隐藏。");
 
     QMessageBox box(QMessageBox::Information,
@@ -339,10 +332,9 @@ void MainWindow::showHiddenResult(int side) {
     const QString sideText = side == 0 ? QStringLiteral("红方")
                                        : QStringLiteral("黑方");
     const QString details = QStringLiteral(
-        "%1识别结果\n\n颜色：%2\n棋子：%3\n置信度：%4%\n\n"
+        "%1识别结果\n\n棋子：%2\n置信度：%3%\n\n"
         "点击确认后，结果将再次隐藏。")
         .arg(sideText)
-        .arg(colorText(piece.color))
         .arg(QString::fromStdString(piece.character))
         .arg(static_cast<int>(piece.confidence * 100));
 
@@ -387,19 +379,6 @@ void MainWindow::judgeIfReady() {
     blackCaptureBtn_->setEnabled(false);
     resetBtn_->setEnabled(true);
     statusLabel_->setText(QStringLiteral("状态: 本轮判定完成"));
-
-    QMessageBox resultBox(QMessageBox::Information,
-                          QStringLiteral("对战结果"),
-                          resultText, QMessageBox::Ok, this);
-    styleDialog(&resultBox);
-    resultBox.setStyleSheet(resultBox.styleSheet() + QStringLiteral(
-        "QMessageBox QLabel {"
-        "  color: %1;"
-        "  font-size: 32px;"
-        "  font-weight: bold;"
-        "  padding: 20px;"
-        "}").arg(battleColor(result)));
-    resultBox.exec();
 }
 
 void MainWindow::resetRound() {
@@ -519,14 +498,6 @@ QString MainWindow::pieceName(int id) {
     };
     if (id < 1 || id > 12) return QStringLiteral("未知");
     return QString::fromUtf8(names[id]);
-}
-
-QString MainWindow::colorText(junqi::PieceColor c) {
-    switch (c) {
-        case junqi::PieceColor::RED: return QStringLiteral("红色");
-        case junqi::PieceColor::BLACK: return QStringLiteral("黑色");
-        default: return QStringLiteral("未知");
-    }
 }
 
 QString MainWindow::battleText(junqi::BattleResult r) {

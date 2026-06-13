@@ -22,9 +22,6 @@ PieceResult Pipeline::process_single_piece(const cv::Mat& piece_color,
     PieceResult result;
     result.bounding_box = bbox;
 
-    // Color classification
-    result.color = color_classifier_.classify(piece_color);
-
     // Multiple extraction strategies avoid tying recognition to one lighting
     // condition or one assumed background polarity.
     auto candidates =

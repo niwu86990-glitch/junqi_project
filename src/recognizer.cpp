@@ -73,8 +73,9 @@ float Recognizer::shape_score(const cv::Mat& scene,
 
     cv::Mat overlap;
     cv::bitwise_and(scene, sample.binary, overlap);
+    const int overlap_pixels = cv::countNonZero(overlap);
     const float dice =
-        2.0f * cv::countNonZero(overlap) /
+        2.0f * overlap_pixels /
         static_cast<float>(scene_pixels + sample.stroke_pixels);
 
     const double scene_to_sample =
@@ -86,10 +87,22 @@ float Recognizer::shape_score(const cv::Mat& scene,
     const float chamfer =
         static_cast<float>(std::exp(-mean_distance / 3.5));
 
-    cv::Mat correlation_result;
-    cv::matchTemplate(scene, sample.binary, correlation_result,
-                      cv::TM_CCOEFF_NORMED);
-    float correlation = correlation_result.at<float>(0, 0);
+    // For equal-size binary images, TM_CCOEFF_NORMED can be calculated
+    // exactly from the foreground counts and their overlap. Avoiding thousands
+    // of tiny matchTemplate calls is significant on the X210 Cortex-A8.
+    const double pixels = static_cast<double>(scene.total());
+    const double correlation_denominator = std::sqrt(
+        static_cast<double>(scene_pixels) *
+        (pixels - scene_pixels) *
+        sample.stroke_pixels *
+        (pixels - sample.stroke_pixels));
+    float correlation = 0.0f;
+    if (correlation_denominator > 0.0) {
+        correlation = static_cast<float>(
+            (pixels * overlap_pixels -
+             static_cast<double>(scene_pixels) * sample.stroke_pixels) /
+            correlation_denominator);
+    }
     correlation = std::max(0.0f, std::min(1.0f,
                            (correlation + 1.0f) * 0.5f));
 

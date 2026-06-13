@@ -46,7 +46,6 @@ private:
     static void styleDialog(QWidget* dialog);
     static QString battleColor(junqi::BattleResult result);
     static QString pieceName(int id);
-    static QString colorText(junqi::PieceColor c);
     static QString battleText(junqi::BattleResult r);
 
     // UI 控件

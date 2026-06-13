@@ -1,7 +1,5 @@
 #include "junqi/processing_worker.h"
 #include <QDebug>
-#include <QByteArray>
-#include <opencv2/imgcodecs.hpp>
 
 namespace junqi {
 
@@ -49,17 +47,6 @@ void ProcessingWorker::processSide(int side) {
     if (!camera_.capture(frame) || frame.empty()) {
         emit errorOccurred(side, QStringLiteral("摄像头采集失败"));
         return;
-    }
-
-    // Optional field-debug capture. The file is overwritten on each shot, so
-    // enabling it does not grow storage usage over time.
-    const QByteArray debugCapture = qgetenv("JUNQI_SAVE_LAST_CAPTURE");
-    if (!debugCapture.isEmpty() && debugCapture != "0") {
-        const QString path =
-            debugCapture == "1"
-                ? QStringLiteral("/root/junqi_last_capture.jpg")
-                : QString::fromLocal8Bit(debugCapture);
-        cv::imwrite(path.toLocal8Bit().constData(), frame);
     }
 
     // ---- 4. 运行单棋子识别流水线 ----

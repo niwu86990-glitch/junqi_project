@@ -1,6 +1,5 @@
 #include "junqi/preprocessor.h"
 #include "junqi/detector.h"
-#include "junqi/color_classifier.h"
 #include "junqi/character_extractor.h"
 #include "junqi/recognizer.h"
 #include "junqi/template_library.h"
@@ -37,7 +36,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    junqi::ColorClassifier color_clf;
     junqi::CharacterExtractor extractor;
     junqi::TemplateLibrary lib;
     lib.load(argv[2]);
@@ -46,10 +44,6 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < pieces.size(); i++) {
         auto& p = pieces[i];
         std::cout << "\n--- Piece " << i << " (" << (p.is_left ? "L" : "R") << ") ---\n";
-
-        auto color = color_clf.classify(p.roi_color);
-        std::cout << "Color: " << (color == junqi::PieceColor::RED ? "RED" :
-                                   color == junqi::PieceColor::BLACK ? "BLACK" : "UNKNOWN") << "\n";
 
         cv::Mat char_bin = extractor.extract(p.roi_gray);
         if (char_bin.empty()) {

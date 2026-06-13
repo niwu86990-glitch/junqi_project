@@ -5,14 +5,7 @@
 
 namespace junqi {
 
-enum class PieceColor {
-    RED,
-    BLACK,
-    UNKNOWN
-};
-
 struct PieceResult {
-    PieceColor color = PieceColor::UNKNOWN;
     std::string character;
     int character_id = -1;
     float confidence = 0.0f;

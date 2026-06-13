@@ -54,10 +54,8 @@ ls templates/*/sample_*.png | wc -l
 - 格式：
 ```yaml
 left:
-  color: red
   character: "司令"
 right:
-  color: black
   character: "军长"
 ```
 
@@ -69,12 +67,11 @@ right:
 ```
 
 ### 步骤 7：分析结果
-- 查看颜色准确率和字符准确率
+- 查看字符准确率
 - 查看混淆矩阵，找出容易混淆的字符对
 - 对误判样本做人工分析
 
 ### 步骤 8：参数调优
-- 颜色分类：调整 `color_classifier.cpp` 中的阈值
 - 模板匹配：调整 `templates/metadata.yaml` 中的 matching 参数
 - 重新编译并评测，迭代直到达标
 
@@ -122,13 +119,38 @@ sh /opt/junqi/run.sh
 重新部署前可删除开发板中残留的同名压缩包，避免 `tftp` 或 `gunzip`
 因目标文件已存在而失败。
 
-### 保存最近一次开发板截图
+### 开发板截图
 
-默认不会写入调试照片。需要收集误判样本时，可执行：
+每次识别会保存 `/tmp/snap_XXX.jpg`。程序正常退出、收到常见终止信号或下次
+启动时会自动删除这些截图；突然断电时的残留将在下次启动时清理。
 
-```sh
-JUNQI_SAVE_LAST_CAPTURE=1 sh /opt/junqi/run.sh
+### 显示异常排查
+
+若 LCD 出现开发板原有的 `Poweroff Test` 画面，但串口没有显示项目退出，说明
+`qttest` 或 `hdmi_x210` 正在与项目争用 `/dev/fb0`。正常启动日志应包含：
+
+```text
+=== DIAG: board display services ===
+pausing pid=... command=qttest
+pausing pid=... command=hdmi_x210
 ```
 
-每次识别会覆盖保存 `/root/junqi_last_capture.jpg`，不会持续占用存储。
-建议分别收集红/黑棋子、亮光/暗光、不同背景和不同摆放位置的失败图片。
+不要直接杀死 `hdmi_x210`。该进程可能参与维持显示硬件状态，终止后会导致
+Qt 5.6 在 `show()` 阶段段错误，日志表现为：
+
+```text
+Segmentation fault
+[RUN] junqi_gui exited with status 139
+```
+
+当前启动脚本使用 `SIGSTOP` 暂停板载界面，项目退出时再通过 `SIGCONT` 恢复。
+同时应保留以下已验证配置：
+
+```sh
+QT_QPA_PLATFORM=linuxfb
+QT_QPA_FB=/dev/fb0
+QT_QPA_LINUXFB_NO_DOUBLE_BUFFER=1
+```
+
+不要在未单独验证时改成 `linuxfb:fb=/dev/fb0:size=1024x600`，也不要在缺少
+`TSLIB_CONFFILE` 等配置时强制设置 `QT_QPA_FB_TSLIB=1`。

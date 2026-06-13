@@ -1,6 +1,6 @@
 # 军棋棋子图像识别系统 (Junqi Piece Recognition System)
 
-基于 C++ 和 OpenCV 的智能军棋裁判系统，自动识别棋盘照片中的棋子颜色和文字，并判定对战结果。
+基于 C++ 和 OpenCV 的智能军棋裁判系统，自动识别棋子文字并判定对战结果。红黑阵营由 GUI 的红方/黑方识别入口确定。
 
 ## 项目状态
 
@@ -71,7 +71,6 @@ junqi/
 │   ├── result.h                #   核心数据结构
 │   ├── preprocessor.h          #   图像预处理
 │   ├── detector.h              #   棋子检测
-│   ├── color_classifier.h      #   颜色分类
 │   ├── character_extractor.h   #   字符提取
 │   ├── recognizer.h            #   字符识别
 │   ├── template_library.h      #   模板库管理
@@ -85,7 +84,6 @@ junqi/
 ├── src/                        # 源文件
 │   ├── preprocessor.cpp
 │   ├── detector.cpp
-│   ├── color_classifier.cpp
 │   ├── character_extractor.cpp
 │   ├── recognizer.cpp
 │   ├── template_library.cpp
@@ -129,12 +127,12 @@ junqi/
   ├─ 2. Detector           → 原始/归一化灰度、多极性阈值、边缘候选联合评分
   ├─ 3. CharacterExtractor → 暗笔画、红色色差、局部自适应阈值多候选提取
   ├─ 4. Recognizer         → 笔画重叠 + 双向轮廓距离 + 相关性联合评分
-  ├─ 5. ColorClassifier    → 相对 RGB/Lab/YCrCb 色度 + 高光邻域恢复
-  └─ 6. BattleJudge        → 双方分别确认后根据军棋规则判定
+  └─ 5. BattleJudge        → 双方分别确认后根据军棋规则判定
 ```
 
 识别算法不再假定拍摄背景必须为纯黑色。现有模板图片保持不变，运行时
 通过多候选提取和形状评分处理光照、反光、小角度旋转及位置变化。
+系统不再从图像分类红黑颜色；GUI 当前操作入口直接确定棋子所属阵营。
 
 ## 支持的棋子
 

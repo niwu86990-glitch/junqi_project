@@ -10,3 +10,14 @@ Testing/
 *.jpg
 *.png
 CLAUDE.md
+
+# Runtime packages and temporary local helpers are generated locally.
+/deploy/junqi_deploy/
+/deploy/temporary/
+/tools/temporary/
+/order.md
+
+# Recognition templates are project data and must remain versioned.
+!/templates/
+!/templates/**/
+!/templates/**/*.png

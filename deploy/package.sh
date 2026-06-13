@@ -36,10 +36,13 @@ TSLIB_ROOT="/home/cheese/x210/tslib"
 
 echo "=== 军棋识别系统部署打包 ==="
 
-if [ ! -x "${BUILD_DIR}/junqi_gui" ] || [ ! -x "${BUILD_DIR}/junqi_cli" ]; then
+if [ ! -x "${BUILD_DIR}/junqi_gui" ] ||
+   [ ! -x "${BUILD_DIR}/junqi_cli" ] ||
+   [ ! -x "${BUILD_DIR}/junqi_capture_test" ]; then
     echo "错误: 未找到本项目最新的 ARM 可执行文件:"
     echo "  ${BUILD_DIR}/junqi_gui"
     echo "  ${BUILD_DIR}/junqi_cli"
+    echo "  ${BUILD_DIR}/junqi_capture_test"
     echo "请先完成 ARM 交叉编译，再重新运行本脚本。"
     exit 1
 fi
@@ -56,8 +59,10 @@ mkdir -p "${DEPLOY_DIR}/${PACKAGE}/opt/tslib/etc"
 echo "1. 复制 ARM 可执行文件..."
 cp "${BUILD_DIR}/junqi_gui" "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/"
 cp "${BUILD_DIR}/junqi_cli" "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/"
+cp "${BUILD_DIR}/junqi_capture_test" "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/"
 arm-none-linux-gnueabi-strip "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/junqi_gui" 2>/dev/null || true
 arm-none-linux-gnueabi-strip "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/junqi_cli" 2>/dev/null || true
+arm-none-linux-gnueabi-strip "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/junqi_capture_test" 2>/dev/null || true
 
 # ========== 2. 拷贝模板库 ==========
 echo "2. 复制模板库..."
@@ -125,7 +130,10 @@ cp -v "${DEPLOY_DIR}/fonts.ttf" "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/fonts/Alibab
 
 # ========== 7. 启动脚本 ==========
 echo "7. 复制启动脚本..."
-cp "${DEPLOY_DIR}/run.sh" "${DEPLOY_DIR}/run_cli.sh" "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/"
+cp "${DEPLOY_DIR}/run.sh" \
+   "${DEPLOY_DIR}/run_cli.sh" \
+   "${DEPLOY_DIR}/run_capture_test.sh" \
+   "${DEPLOY_DIR}/${PACKAGE}/opt/junqi/"
 
 # ========== 8. Qt linuxfb 平台插件 ==========
 echo "8. 复制 Qt 平台插件 (linuxfb)..."

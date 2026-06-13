@@ -21,7 +21,6 @@ $CXX -fPIC -g -O2 -std=c++11 \
     src/battle_judge.cpp \
     src/camera_capture.cpp \
     src/character_extractor.cpp \
-    src/color_classifier.cpp \
     src/detector.cpp \
     src/main_window.cpp \
     src/pipeline.cpp \

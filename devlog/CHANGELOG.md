@@ -184,3 +184,20 @@
 - 棋子确认后显示“结果已隐藏，点击查看”，避免主界面直接泄露棋子内容
 - 从确认识别到开始下一轮之前，均可点击对应按钮重新查看已保存的识别结果
 - 再次查看弹窗仅提供“确认”按钮，关闭后结果重新隐藏，不影响已保存结果和对战判定
+
+## 2026-06-14 — X210 framebuffer 争用修复
+
+- 删除 `JUNQI_SAVE_LAST_CAPTURE` 调试开关；正常识别截图统一保存在
+  `/tmp/snap_*.jpg`，程序退出或下次启动时自动清理。
+- 确认 LCD 上的 `Poweroff Test` 来自板载 `qttest`/`hdmi_x210`，不是项目退出或
+  项目自身待机。
+- 修复板载测试界面与 `junqi_gui` 同时写 `/dev/fb0` 导致的局部覆盖和旧画面
+  重现。
+- 放弃终止 `hdmi_x210` 的方案；该操作会导致 Qt 5.6 在 `show()` 阶段发生
+  `Segmentation fault`，退出状态为 `139`。
+- 启动项目前改用 `SIGSTOP` 暂停 `qttest` 和 `hdmi_x210`，项目退出时使用
+  `SIGCONT` 恢复。
+- 恢复已验证稳定的 `QT_QPA_PLATFORM=linuxfb`、`QT_QPA_FB=/dev/fb0` 和
+  `QT_QPA_LINUXFB_NO_DOUBLE_BUFFER=1` 配置。
+- 移除未经板端验证的 `linuxfb:size=1024x600` 和强制 tslib 初始化参数。
+- 启动脚本关闭控制台自动 blank/powersave/powerdown，并输出 GUI 退出状态。

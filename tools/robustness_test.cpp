@@ -16,7 +16,6 @@ struct Scenario {
     cv::Scalar ink;
     cv::Point center;
     double angle;
-    bool red;
     bool gradient;
     bool glare;
     bool texture;
@@ -90,14 +89,6 @@ cv::Mat make_scene(const cv::Mat& character, const Scenario& scenario) {
     return scene;
 }
 
-const char* color_name(junqi::PieceColor color) {
-    switch (color) {
-        case junqi::PieceColor::RED: return "red";
-        case junqi::PieceColor::BLACK: return "black";
-        default: return "unknown";
-    }
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -117,33 +108,32 @@ int main(int argc, char** argv) {
     const std::vector<Scenario> scenarios = {
         {cv::Scalar(10, 10, 10), cv::Scalar(25, 25, 25),
          cv::Point(320, 240), 0.0,
-         false, false, false, false},
+         false, false, false},
         {cv::Scalar(190, 190, 190), cv::Scalar(25, 35, 205),
          cv::Point(235, 205), 7.0,
-         true, true, true, false},
+         true, true, false},
         {cv::Scalar(75, 100, 125), cv::Scalar(25, 35, 205),
          cv::Point(405, 275), -8.0,
-         true, false, false, true},
+         false, false, true},
         {cv::Scalar(225, 215, 195), cv::Scalar(25, 25, 25),
          cv::Point(330, 225), 5.0,
-         false, true, false, true},
+         true, false, true},
         // Low-saturation red caused by overexposure/white balance.
         {cv::Scalar(185, 195, 205), cv::Scalar(115, 130, 180),
          cv::Point(310, 235), -4.0,
-         true, false, false, false},
+         false, false, false},
         // Pale reflective red with a broad white highlight.
         {cv::Scalar(165, 175, 190), cv::Scalar(150, 165, 210),
          cv::Point(350, 245), 6.0,
-         true, true, true, false},
+         true, true, false},
         // Underexposed red must not collapse into black.
         {cv::Scalar(35, 40, 45), cv::Scalar(20, 25, 105),
          cv::Point(285, 255), -6.0,
-         true, true, false, true}
+         true, false, true}
     };
 
     int total = 0;
     int character_correct = 0;
-    int color_correct = 0;
 
     for (const auto& character : library.templates()) {
         if (character.samples.empty()) continue;
@@ -188,33 +178,23 @@ int main(int argc, char** argv) {
 
             const bool char_ok =
                 result.character_id == character.character_id;
-            const junqi::PieceColor expected_color =
-                scenarios[i].red ? junqi::PieceColor::RED
-                                 : junqi::PieceColor::BLACK;
-            const bool color_ok = result.color == expected_color;
             total++;
             if (char_ok) character_correct++;
-            if (color_ok) color_correct++;
 
             std::cout << character.chinese_name << " scenario " << i
                       << ": predicted=" << result.character
                       << " confidence=" << result.confidence
-                      << " color=" << color_name(result.color)
                       << " bbox=" << result.bounding_box
                       << " time=" << elapsed << "ms "
-                      << (char_ok ? "CHAR_OK " : "CHAR_FAIL ")
-                      << (color_ok ? "COLOR_OK" : "COLOR_FAIL")
+                      << (char_ok ? "CHAR_OK" : "CHAR_FAIL")
                       << "\n";
         }
     }
 
     const double char_accuracy =
         total ? 100.0 * character_correct / total : 0.0;
-    const double color_accuracy =
-        total ? 100.0 * color_correct / total : 0.0;
     std::cout << "\nSynthetic robustness: character=" << char_accuracy
-              << "% color=" << color_accuracy << "% (" << total
-              << " cases)\n";
+              << "% (" << total << " cases)\n";
 
-    return (char_accuracy >= 80.0 && color_accuracy >= 90.0) ? 0 : 2;
+    return char_accuracy >= 80.0 ? 0 : 2;
 }

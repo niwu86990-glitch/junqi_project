@@ -10,9 +10,7 @@
 namespace fs = std::filesystem;
 
 struct GroundTruth {
-    std::string left_color;
     std::string left_char;
-    std::string right_color;
     std::string right_char;
 };
 
@@ -33,22 +31,11 @@ static bool load_ground_truth(const std::string& yaml_path, GroundTruth& gt) {
             current_section = "left";
         } else if (line.find("right:") != std::string::npos) {
             current_section = "right";
-        } else if (current_section == "left" && line.find("color:") != std::string::npos) {
-            auto pos = line.find("color:") + 6;
-            gt.left_color = line.substr(pos);
-            // trim
-            gt.left_color.erase(0, gt.left_color.find_first_not_of(" \t"));
-            gt.left_color.erase(gt.left_color.find_last_not_of(" \t") + 1);
         } else if (current_section == "left" && line.find("character:") != std::string::npos) {
             auto pos = line.find("character:") + 10;
             gt.left_char = line.substr(pos);
             gt.left_char.erase(0, gt.left_char.find_first_not_of(" \"\t"));
             gt.left_char.erase(gt.left_char.find_last_not_of(" \"\t") + 1);
-        } else if (current_section == "right" && line.find("color:") != std::string::npos) {
-            auto pos = line.find("color:") + 6;
-            gt.right_color = line.substr(pos);
-            gt.right_color.erase(0, gt.right_color.find_first_not_of(" \t"));
-            gt.right_color.erase(gt.right_color.find_last_not_of(" \t") + 1);
         } else if (current_section == "right" && line.find("character:") != std::string::npos) {
             auto pos = line.find("character:") + 10;
             gt.right_char = line.substr(pos);
@@ -56,15 +43,7 @@ static bool load_ground_truth(const std::string& yaml_path, GroundTruth& gt) {
             gt.right_char.erase(gt.right_char.find_last_not_of(" \"\t") + 1);
         }
     }
-    return !gt.left_color.empty() && !gt.right_color.empty();
-}
-
-static std::string color_name(junqi::PieceColor c) {
-    switch (c) {
-        case junqi::PieceColor::RED:   return "red";
-        case junqi::PieceColor::BLACK: return "black";
-        default: return "unknown";
-    }
+    return !gt.left_char.empty() && !gt.right_char.empty();
 }
 
 int main(int argc, char** argv) {
@@ -87,7 +66,7 @@ int main(int argc, char** argv) {
     }
 
     int total = 0;
-    int correct_color = 0, correct_char = 0, fully_correct = 0;
+    int correct_char = 0, fully_correct = 0;
 
     // Confusion matrix: 12x12
     std::vector<std::vector<int>> confusion(13, std::vector<int>(13, 0));
@@ -120,16 +99,12 @@ int main(int argc, char** argv) {
         total++;
         times_ms.push_back(result.elapsed_ms);
 
-        bool l_color_ok = (color_name(result.left_piece.color) == gt.left_color);
-        bool r_color_ok = (color_name(result.right_piece.color) == gt.right_color);
         bool l_char_ok = (result.left_piece.character == gt.left_char);
         bool r_char_ok = (result.right_piece.character == gt.right_char);
 
-        if (l_color_ok) correct_color++;
-        if (r_color_ok) correct_color++;
         if (l_char_ok) correct_char++;
         if (r_char_ok) correct_char++;
-        if (l_color_ok && r_color_ok && l_char_ok && r_char_ok) fully_correct++;
+        if (l_char_ok && r_char_ok) fully_correct++;
 
         // Confusion matrix entries
         int gt_l_id = -1, pred_l_id = result.left_piece.character_id;
@@ -142,9 +117,8 @@ int main(int argc, char** argv) {
         if (gt_r_id >= 1 && pred_r_id >= 1) confusion[gt_r_id][pred_r_id]++;
 
         std::cout << path << ": "
-                  << (l_color_ok ? "O" : "X") << (l_char_ok ? "O" : "X")
-                  << " / "
-                  << (r_color_ok ? "O" : "X") << (r_char_ok ? "O" : "X")
+                  << (l_char_ok ? "O" : "X") << " / "
+                  << (r_char_ok ? "O" : "X")
                   << " (" << result.elapsed_ms << "ms)\n";
     }
 
@@ -154,9 +128,6 @@ int main(int argc, char** argv) {
     std::cout << "  Benchmark Results\n";
     std::cout << "========================================\n";
     std::cout << "Total images:    " << total << "\n";
-    std::cout << "Color accuracy:  " << std::fixed << std::setprecision(1)
-              << (100.0 * correct_color / total_pieces) << "% ("
-              << correct_color << "/" << total_pieces << ")\n";
     std::cout << "Char accuracy:   " << std::fixed << std::setprecision(1)
               << (100.0 * correct_char / total_pieces) << "% ("
               << correct_char << "/" << total_pieces << ")\n";
